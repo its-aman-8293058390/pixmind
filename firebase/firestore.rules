@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection
+    match /users/{userId} {
+      // Allow users to read any user document
+      allow read: if request.auth != null;
+      
+      // Allow users to create their own document
+      allow create: if request.auth != null && 
+        request.auth.uid == userId;
+      
+      // Allow users to update their own document
+      allow update: if request.auth != null && 
+        request.auth.uid == userId;
+      
+      // Allow users to delete their own document
+      allow delete: if request.auth != null && 
+        request.auth.uid == userId;
+    }
+    
+    // Posts collection
+    match /posts/{postId} {
+      // Allow authenticated users to read posts
+      allow read: if request.auth != null;
+      
+      // Allow authenticated users to create posts with validation
+      allow create: if request.auth != null && 
+        request.resource.data.uid == request.auth.uid;
+      
+      // Allow users to update their own posts
+      allow update: if request.auth != null && 
+        resource.data.uid == request.auth.uid;
+      
+      // Allow users to delete their own posts
+      allow delete: if request.auth != null && 
+        resource.data.uid == request.auth.uid;
+    }
+  }
+}

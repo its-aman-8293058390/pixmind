@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "532085122130",
+    "project_id": "pixmind-c5231",
+    "storage_bucket": "pixmind-c5231.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:532085122130:android:93f3b0688dc7304be82b8b",
+        "android_client_info": {
+          "package_name": "com.example.pixmind"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAEiUkQVzHSIzDIdCtpdoYJDoUr22-CBGk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
