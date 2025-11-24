@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:pixmind/src/providers/auth_provider.dart';
 import 'package:pixmind/src/providers/post_provider.dart';
 import 'package:pixmind/src/models/post_model.dart';
+import 'package:video_player/video_player.dart';
 
 /// ReelsScreen displays short video content similar to Instagram Reels
 class ReelsScreen extends StatefulWidget {
@@ -63,7 +64,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
                   itemCount: postProvider.reels.length,
                   itemBuilder: (context, index) {
                     return _buildReelItem(
-                        postProvider.reels[index], authProvider, postProvider);
+                        postProvider.reels[index], authProvider, postProvider, index == _currentPage);
                   },
                 ),
     );
@@ -103,27 +104,205 @@ class _ReelsScreenState extends State<ReelsScreen> {
 
   /// Build a single reel item
   Widget _buildReelItem(
-      PostModel reel, AuthProvider authProvider, PostProvider postProvider) {
+      PostModel reel, AuthProvider authProvider, PostProvider postProvider, bool isVisible) {
     final isLiked = reel.likedBy.contains(authProvider.user?.uid ?? '');
+
+    return ReelVideoPlayer(
+      reel: reel,
+      isLiked: isLiked,
+      isVisible: isVisible,
+      authProvider: authProvider,
+      postProvider: postProvider,
+      onLike: () => _handleLikeReel(reel, authProvider, postProvider),
+      onSave: () => _handleSaveReel(reel, authProvider, postProvider),
+    );
+  }
+
+  /// Handle like/unlike reel
+  void _handleLikeReel(
+      PostModel reel, AuthProvider authProvider, PostProvider postProvider) {
+    if (authProvider.user == null) return;
+
+    final isLiked = reel.likedBy.contains(authProvider.user!.uid);
+
+    if (isLiked) {
+      postProvider.unlikePost(reel.id, authProvider.user!.uid);
+    } else {
+      postProvider.likePost(reel.id, authProvider.user!.uid);
+    }
+  }
+
+  /// Handle save/unsave reel
+  void _handleSaveReel(
+      PostModel reel, AuthProvider authProvider, PostProvider postProvider) {
+    if (authProvider.user == null) return;
+
     final isSaved = reel.isSaved;
 
+    if (isSaved) {
+      postProvider.unsavePost(reel.id, authProvider.user!.uid);
+    } else {
+      postProvider.savePost(reel.id, authProvider.user!.uid);
+    }
+  }
+}
+
+class ReelVideoPlayer extends StatefulWidget {
+  final PostModel reel;
+  final bool isLiked;
+  final bool isVisible;
+  final AuthProvider authProvider;
+  final PostProvider postProvider;
+  final VoidCallback onLike;
+  final VoidCallback onSave;
+
+  ReelVideoPlayer({
+    required this.reel,
+    required this.isLiked,
+    required this.isVisible,
+    required this.authProvider,
+    required this.postProvider,
+    required this.onLike,
+    required this.onSave,
+  });
+
+  @override
+  _ReelVideoPlayerState createState() => _ReelVideoPlayerState();
+}
+
+class _ReelVideoPlayerState extends State<ReelVideoPlayer> {
+  late VideoPlayerController _controller;
+  bool _isInitialized = false;
+  bool _isPlaying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeVideoPlayer();
+  }
+
+  void _initializeVideoPlayer() async {
+    if (widget.reel.videoUrl != null && widget.reel.videoUrl!.isNotEmpty) {
+      _controller = VideoPlayerController.network(widget.reel.videoUrl!);
+      await _controller.initialize();
+      _controller.setLooping(true);
+      setState(() {
+        _isInitialized = true;
+      });
+      
+      // Auto-play when visible
+      if (widget.isVisible) {
+        _controller.play();
+        setState(() {
+          _isPlaying = true;
+        });
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant ReelVideoPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    
+    // Handle visibility changes
+    if (oldWidget.isVisible != widget.isVisible) {
+      if (_isInitialized) {
+        if (widget.isVisible) {
+          _controller.play();
+          setState(() {
+            _isPlaying = true;
+          });
+        } else {
+          _controller.pause();
+          setState(() {
+            _isPlaying = false;
+          });
+        }
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_isInitialized) {
+      _controller.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isSaved = widget.reel.isSaved;
+    
     return Container(
       color: Colors.black,
       child: Stack(
         children: [
-          // Video placeholder (in a real app, this would be a video player)
-          Container(
-            width: double.infinity,
-            height: double.infinity,
-            color: Colors.grey[900],
-            child: Center(
-              child: Icon(
-                Icons.play_arrow,
-                size: 100,
-                color: Colors.white.withOpacity(0.7),
+          // Video player or placeholder
+          if (widget.reel.videoUrl != null && widget.reel.videoUrl!.isNotEmpty && _isInitialized)
+            Positioned.fill(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: _controller.value.size.width,
+                  height: _controller.value.size.height,
+                  child: VideoPlayer(_controller),
+                ),
+              ),
+            )
+          else
+            // Video placeholder (in a real app, this would be a video player)
+            Container(
+              width: double.infinity,
+              height: double.infinity,
+              color: Colors.grey[900],
+              child: Center(
+                child: Icon(
+                  Icons.play_arrow,
+                  size: 100,
+                  color: Colors.white.withOpacity(0.7),
+                ),
               ),
             ),
-          ),
+          
+          // Play/Pause overlay
+          if (_isInitialized)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () {
+                  if (_controller.value.isPlaying) {
+                    _controller.pause();
+                    setState(() {
+                      _isPlaying = false;
+                    });
+                  } else {
+                    _controller.play();
+                    setState(() {
+                      _isPlaying = true;
+                    });
+                  }
+                },
+                child: Center(
+                  child: AnimatedOpacity(
+                    opacity: _isPlaying ? 0.0 : 0.7,
+                    duration: Duration(milliseconds: 300),
+                    child: Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _isPlaying ? Icons.pause : Icons.play_arrow,
+                        size: 50,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          
           // Gradient overlay at bottom
           Positioned(
             bottom: 0,
@@ -143,6 +322,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
               ),
             ),
           ),
+          
           // Reel info
           Positioned(
             bottom: 20,
@@ -166,7 +346,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        reel.username,
+                        widget.reel.username,
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -178,9 +358,9 @@ class _ReelsScreenState extends State<ReelsScreen> {
                 ),
                 SizedBox(height: 10),
                 // Reel description
-                if (reel.content.isNotEmpty)
+                if (widget.reel.content.isNotEmpty)
                   Text(
-                    reel.content,
+                    widget.reel.content,
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 14,
@@ -195,16 +375,14 @@ class _ReelsScreenState extends State<ReelsScreen> {
                       children: [
                         IconButton(
                           icon: Icon(
-                            isLiked ? Icons.favorite : Icons.favorite_border,
-                            color: isLiked ? Colors.red : Colors.white,
+                            widget.isLiked ? Icons.favorite : Icons.favorite_border,
+                            color: widget.isLiked ? Colors.red : Colors.white,
                             size: 30,
                           ),
-                          onPressed: () {
-                            _handleLikeReel(reel, authProvider, postProvider);
-                          },
+                          onPressed: widget.onLike,
                         ),
                         Text(
-                          '${reel.likes}',
+                          '${widget.reel.likes}',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 12,
@@ -233,7 +411,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
                           },
                         ),
                         Text(
-                          '${reel.comments}',
+                          '${widget.reel.comments}',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 12,
@@ -267,9 +445,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
                         color: isSaved ? Colors.white : Colors.white,
                         size: 30,
                       ),
-                      onPressed: () {
-                        _handleSaveReel(reel, authProvider, postProvider);
-                      },
+                      onPressed: widget.onSave,
                     ),
                   ],
                 ),
@@ -279,33 +455,5 @@ class _ReelsScreenState extends State<ReelsScreen> {
         ],
       ),
     );
-  }
-
-  /// Handle like/unlike reel
-  void _handleLikeReel(
-      PostModel reel, AuthProvider authProvider, PostProvider postProvider) {
-    if (authProvider.user == null) return;
-
-    final isLiked = reel.likedBy.contains(authProvider.user!.uid);
-
-    if (isLiked) {
-      postProvider.unlikePost(reel.id, authProvider.user!.uid);
-    } else {
-      postProvider.likePost(reel.id, authProvider.user!.uid);
-    }
-  }
-
-  /// Handle save/unsave reel
-  void _handleSaveReel(
-      PostModel reel, AuthProvider authProvider, PostProvider postProvider) {
-    if (authProvider.user == null) return;
-
-    final isSaved = reel.isSaved;
-
-    if (isSaved) {
-      postProvider.unsavePost(reel.id, authProvider.user!.uid);
-    } else {
-      postProvider.savePost(reel.id, authProvider.user!.uid);
-    }
   }
 }
