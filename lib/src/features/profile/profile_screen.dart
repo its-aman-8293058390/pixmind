@@ -3,9 +3,14 @@ import 'package:provider/provider.dart';
 import 'package:pixmind/src/providers/auth_provider.dart';
 import 'package:pixmind/src/providers/post_provider.dart';
 import 'package:pixmind/src/models/post_model.dart';
+import 'package:pixmind/src/models/user_model.dart'; // Import user model
 
 /// ProfileScreen displays user profile and their posts
 class ProfileScreen extends StatefulWidget {
+  final UserModel? user; // Optional user parameter for viewing other users' profiles
+  
+  ProfileScreen({this.user}); // Constructor
+  
   @override
   _ProfileScreenState createState() => _ProfileScreenState();
 }
@@ -18,8 +23,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final postProvider = Provider.of<PostProvider>(context, listen: false);
-      if (authProvider.user != null) {
-        postProvider.loadUserPosts(authProvider.user!.uid);
+      
+      // Determine which user's posts to load
+      final userId = widget.user?.uid ?? authProvider.user?.uid;
+      if (userId != null) {
+        postProvider.loadUserPosts(userId);
       }
     });
   }
@@ -29,14 +37,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final authProvider = Provider.of<AuthProvider>(context);
     final postProvider = Provider.of<PostProvider>(context);
     
-    if (authProvider.user == null) {
+    // Determine which user's profile to display
+    final userToDisplay = widget.user ?? authProvider.user;
+    
+    if (userToDisplay == null) {
       return Center(child: CircularProgressIndicator());
     }
+    
+    // Check if we're viewing our own profile
+    final isOwnProfile = widget.user == null;
     
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Profile',
+          isOwnProfile ? 'Profile' : '${userToDisplay.username}\'s Profile',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             color: Color(0xFF6C63FF),
@@ -45,25 +59,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
-        actions: [
+        actions: isOwnProfile ? [
           IconButton(
             icon: Icon(Icons.edit, color: Color(0xFF6C63FF)),
             onPressed: () {
               _showEditProfileModal(context, authProvider);
             },
           ),
-        ],
+        ] : null, // No edit button when viewing other users' profiles
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          postProvider.loadUserPosts(authProvider.user!.uid);
+          final userId = widget.user?.uid ?? authProvider.user!.uid;
+          postProvider.loadUserPosts(userId);
         },
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Profile header
-              _buildProfileHeader(authProvider),
+              _buildProfileHeader(userToDisplay),
               SizedBox(height: 20),
               // User stats
               _buildUserStats(),
@@ -72,7 +87,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: 20),
                 child: Text(
-                  'Your Posts',
+                  isOwnProfile ? 'Your Posts' : 'Posts',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -96,7 +111,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                                 SizedBox(height: 20),
                                 Text(
-                                  'No posts yet',
+                                  isOwnProfile ? 'No posts yet' : 'No posts',
                                   style: TextStyle(
                                     fontSize: 18,
                                     color: Colors.grey[600],
@@ -104,7 +119,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                                 SizedBox(height: 10),
                                 Text(
-                                  'Share your first post!',
+                                  isOwnProfile ? 'Share your first post!' : '',
                                   style: TextStyle(
                                     color: Colors.grey[500],
                                   ),
@@ -132,6 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showEditProfileModal(BuildContext context, AuthProvider authProvider) {
     final _formKey = GlobalKey<FormState>();
     final _usernameController = TextEditingController(text: authProvider.user!.username);
+    final _fullNameController = TextEditingController(text: authProvider.user!.fullName ?? ''); // Added full name controller
     final _bioController = TextEditingController(text: authProvider.user!.bio);
     
     showModalBottomSheet(
@@ -212,6 +228,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 SizedBox(height: 30),
+                // Full name field
+                Text(
+                  'Full Name',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                SizedBox(height: 10),
+                TextFormField(
+                  controller: _fullNameController,
+                  decoration: InputDecoration(
+                    hintText: 'Enter full name',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  enabled: authProvider.canChangeFullName(), // Enable only if user can change full name
+                ),
+                SizedBox(height: 20),
+                // Display message if user cannot change full name
+                if (!authProvider.canChangeFullName())
+                  Container(
+                    padding: EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[50],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info, color: Colors.orange, size: 20),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'You can only change your full name once every 5 days.',
+                            style: TextStyle(
+                              color: Colors.orange[800],
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                SizedBox(height: 20),
                 // Username field
                 Text(
                   'Username',
@@ -269,9 +330,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Navigator.pop(context);
                         
                         try {
+                          // Prepare update data
+                          final String fullName = _fullNameController.text.trim();
+                          final String username = _usernameController.text.trim();
+                          final String bio = _bioController.text.trim();
+                          
+                          // Check if full name has changed and user can change it
+                          bool shouldUpdateFullName = false;
+                          DateTime? lastFullNameChange;
+                          
+                          if (fullName != (authProvider.user!.fullName ?? '') && 
+                              fullName.isNotEmpty) {
+                            if (authProvider.canChangeFullName()) {
+                              shouldUpdateFullName = true;
+                              lastFullNameChange = DateTime.now();
+                            } else {
+                              // Show error message if user tries to change full name too soon
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('You can only change your full name once every 5 days.'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                              return;
+                            }
+                          }
+                          
                           await authProvider.updateUserProfile(
-                            username: _usernameController.text.trim(),
-                            bio: _bioController.text.trim(),
+                            username: username.isNotEmpty ? username : null,
+                            fullName: shouldUpdateFullName ? fullName : null,
+                            bio: bio,
+                            lastFullNameChange: lastFullNameChange,
                           );
                           
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -316,7 +405,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   /// Build profile header with user info
-  Widget _buildProfileHeader(AuthProvider authProvider) {
+  Widget _buildProfileHeader(UserModel user) { // Changed parameter type
     return Container(
       padding: EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -351,8 +440,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Display full name if available, otherwise username
                 Text(
-                  authProvider.user!.username,
+                  user.fullName != null && user.fullName!.isNotEmpty
+                      ? user.fullName!
+                      : user.username,
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -360,16 +452,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 SizedBox(height: 5),
                 Text(
-                  authProvider.user!.email,
+                  user.email,
                   style: TextStyle(
                     color: Colors.grey[600],
                   ),
                 ),
                 SizedBox(height: 10),
-                if (authProvider.user!.bio != null &&
-                    authProvider.user!.bio!.isNotEmpty)
+                if (user.bio != null &&
+                    user.bio!.isNotEmpty)
                   Text(
-                    authProvider.user!.bio!,
+                    user.bio!,
                     style: TextStyle(
                       color: Colors.grey[700],
                     ),
@@ -418,45 +510,130 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ],
     );
   }
-
+  
   /// Build a post card
   Widget _buildPostCard(PostModel post) {
     return Card(
-      margin: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      margin: EdgeInsets.only(bottom: 20),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
       ),
       elevation: 2,
-      child: Padding(
-        padding: EdgeInsets.all(15),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Post content
-            Text(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Post header
+          Padding(
+            padding: EdgeInsets.all(15),
+            child: Row(
+              children: [
+                // Profile picture
+                Container(
+                  height: 40,
+                  width: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.grey[300],
+                  ),
+                  child: Icon(
+                    Icons.person,
+                    size: 20,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                SizedBox(width: 10),
+                // User info
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      post.username,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      _formatTimestamp(post.timestamp),
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // Post content
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 15),
+            child: Text(
               post.content,
               style: TextStyle(
                 fontSize: 16,
-                height: 1.5,
               ),
             ),
-            SizedBox(height: 15),
-            // Post timestamp
-            Text(
-              _formatTimestamp(post.timestamp),
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 12,
+          ),
+          SizedBox(height: 15),
+          // Post image (if available)
+          if (post.imageUrl != null && post.imageUrl!.isNotEmpty)
+            Container(
+              height: 300,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: NetworkImage(post.imageUrl!),
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
-          ],
-        ),
+          SizedBox(height: 15),
+          // Post actions
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 15),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.favorite_border),
+                      onPressed: () {
+                        // TODO: Implement like functionality
+                      },
+                    ),
+                    Text('${post.likes}'),
+                  ],
+                ),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.comment_outlined),
+                      onPressed: () {
+                        // TODO: Implement comment functionality
+                      },
+                    ),
+                    Text('${post.comments}'),
+                  ],
+                ),
+                IconButton(
+                  icon: Icon(Icons.bookmark_border),
+                  onPressed: () {
+                    // TODO: Implement save functionality
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
-
+  
   /// Format timestamp for display
-  String _formatTimestamp(DateTime timestamp) {
+  String _formatTimestamp(DateTime? timestamp) {
+    if (timestamp == null) return '';
+    
     final now = DateTime.now();
     final difference = now.difference(timestamp);
     
@@ -469,5 +646,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } else {
       return 'Just now';
     }
+  }
+}
+
+/// UserProfileViewScreen is a wrapper for viewing other users' profiles
+class UserProfileViewScreen extends StatelessWidget {
+  final UserModel user;
+  
+  const UserProfileViewScreen({Key? key, required this.user}) : super(key: key);
+  
+  @override
+  Widget build(BuildContext context) {
+    return ProfileScreen(user: user);
   }
 }

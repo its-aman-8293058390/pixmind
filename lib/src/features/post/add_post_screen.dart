@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:pixmind/src/providers/auth_provider.dart';
 import 'package:pixmind/src/providers/post_provider.dart';
+import 'package:image_picker/image_picker.dart'; // Added image picker
+import 'dart:io'; // Added for file handling
 
 /// AddPostScreen allows users to create new text posts or reels
 class AddPostScreen extends StatefulWidget {
@@ -13,8 +15,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
   final _formKey = GlobalKey<FormState>();
   final _contentController = TextEditingController();
   String? _errorMessage;
-  String? _selectedImage;
-  String? _selectedVideo;
+  XFile? _selectedImage; // Changed to XFile for image picker
+  XFile? _selectedVideo; // Changed to XFile for image picker
   bool _isCreatingReel = false;
 
   @override
@@ -34,8 +36,8 @@ class _AddPostScreenState extends State<AddPostScreen> {
           uid: authProvider.user!.uid,
           username: authProvider.user!.username,
           content: _contentController.text.trim(),
-          imageUrl: _isCreatingReel ? null : _selectedImage,
-          videoUrl: _isCreatingReel ? _selectedVideo : null,
+          imageUrl: _isCreatingReel ? null : _selectedImage?.path, // Updated to use path
+          videoUrl: _isCreatingReel ? _selectedVideo?.path : null, // Updated to use path
         );
         
         // Clear the form
@@ -63,34 +65,44 @@ class _AddPostScreenState extends State<AddPostScreen> {
     }
   }
 
-  /// Select an image (placeholder for now)
-  void _selectImage() {
-    // TODO: Implement image selection functionality
-    setState(() {
-      _selectedImage = 'assets/images/placeholder.jpg';
-    });
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Image selection feature coming soon!'),
-        backgroundColor: Colors.blue,
-      ),
-    );
+  /// Select an image from gallery
+  Future<void> _selectImage() async {
+    final ImagePicker picker = ImagePicker();
+    try {
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      if (image != null) {
+        setState(() {
+          _selectedImage = image;
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to pick image: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
-  /// Select a video (placeholder for now)
-  void _selectVideo() {
-    // TODO: Implement video selection functionality
-    setState(() {
-      _selectedVideo = 'assets/videos/placeholder.mp4';
-    });
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Video selection feature coming soon!'),
-        backgroundColor: Colors.blue,
-      ),
-    );
+  /// Select a video from gallery
+  Future<void> _selectVideo() async {
+    final ImagePicker picker = ImagePicker();
+    try {
+      final XFile? video = await picker.pickVideo(source: ImageSource.gallery);
+      if (video != null) {
+        setState(() {
+          _selectedVideo = video;
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to pick video: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -307,14 +319,15 @@ class _AddPostScreenState extends State<AddPostScreen> {
       child: _selectedImage != null
           ? Container(
               decoration: BoxDecoration(
-                color: Colors.grey[300],
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Center(
-                child: Icon(
-                  Icons.image,
-                  size: 100,
-                  color: Colors.grey[600],
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.file(
+                  File(_selectedImage!.path),
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
                 ),
               ),
             )

@@ -8,6 +8,7 @@ import 'package:pixmind/src/features/search/search_screen.dart';
 import 'package:pixmind/src/features/profile/profile_screen.dart';
 import 'package:pixmind/src/features/settings/settings_screen.dart';
 import 'package:pixmind/src/features/reels/reels_screen.dart';
+import 'package:pixmind/src/widgets/comment_section.dart'; // Added comment section widget
 
 /// HomeScreen displays the main feed with all posts
 class HomeScreen extends StatefulWidget {
@@ -323,12 +324,19 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                 IconButton(
                   icon: Icon(Icons.comment_outlined, color: Theme.of(context).iconTheme.color),
                   onPressed: () {
-                    // TODO: Implement comment functionality
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Comment feature coming soon!'),
-                        backgroundColor: Colors.blue,
+                    // Show comment section in a modal bottom sheet
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                       ),
+                      builder: (BuildContext context) {
+                        return Container(
+                          height: MediaQuery.of(context).size.height * 0.6,
+                          child: CommentSection(postId: post.id),
+                        );
+                      },
                     );
                   },
                 ),

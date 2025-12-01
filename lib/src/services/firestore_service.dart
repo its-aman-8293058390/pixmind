@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pixmind/src/models/post_model.dart';
 import 'package:pixmind/src/models/user_model.dart';
+import 'package:pixmind/src/models/comment_model.dart'; // Added comment model
 
 /// FirestoreService handles all Firestore database operations
 /// including posts, user data, and search functionality
@@ -170,41 +171,21 @@ class FirestoreService {
     }
   }
 
-  /// Get user by ID
-  Future<UserModel?> getUser(String uid) async {
-    try {
-      DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
-      if (doc.exists) {
-        return UserModel.fromJson(doc.data() as Map<String, dynamic>);
-      }
-      return null;
-    } catch (e) {
-      // Log the error for debugging
-      print('Error fetching user: $e');
-      rethrow;
-    }
-  }
-
-  /// Update user profile
-  Future<void> updateUserProfile({
-    required String uid,
-    String? username,
-    String? bio,
-    String? profilePicture,
-  }) async {
-    try {
-      Map<String, dynamic> updateData = {};
-      
-      if (username != null) updateData['username'] = username;
-      if (bio != null) updateData['bio'] = bio;
-      if (profilePicture != null) updateData['profilePicture'] = profilePicture;
-      
-      if (updateData.isNotEmpty) {
-        await _firestore.collection('users').doc(uid).update(updateData);
-      }
-    } catch (e) {
-      rethrow;
-    }
+  /// Get comments for a post
+  Stream<List<CommentModel>> getComments(String postId) {
+    return _firestore
+        .collection('posts')
+        .doc(postId)
+        .collection('comments')
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return CommentModel.fromJson(data);
+      }).toList();
+    });
   }
 
   /// Search users by username
@@ -219,6 +200,45 @@ class FirestoreService {
       return snapshot.docs.map((doc) {
         return UserModel.fromJson(doc.data() as Map<String, dynamic>);
       }).toList();
+    } catch (e) {
+      rethrow;
+    }
+  }
+  
+  /// Get user by ID
+  Future<UserModel?> getUserById(String uid) async {
+    try {
+      DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
+      if (doc.exists) {
+        return UserModel.fromJson(doc.data() as Map<String, dynamic>);
+      }
+      return null;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Update user profile
+  Future<void> updateUserProfile({
+    required String uid,
+    String? username,
+    String? fullName, // Added full name parameter
+    String? bio,
+    String? profilePicture,
+    DateTime? lastFullNameChange, // Added last full name change parameter
+  }) async {
+    try {
+      Map<String, dynamic> updateData = {};
+      
+      if (username != null) updateData['username'] = username;
+      if (fullName != null) updateData['fullName'] = fullName; // Added full name update
+      if (bio != null) updateData['bio'] = bio;
+      if (profilePicture != null) updateData['profilePicture'] = profilePicture;
+      if (lastFullNameChange != null) updateData['lastFullNameChange'] = Timestamp.fromDate(lastFullNameChange); // Added last full name change update
+      
+      if (updateData.isNotEmpty) {
+        await _firestore.collection('users').doc(uid).update(updateData);
+      }
     } catch (e) {
       rethrow;
     }

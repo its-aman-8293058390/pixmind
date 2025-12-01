@@ -4,6 +4,7 @@ import 'package:pixmind/src/providers/auth_provider.dart';
 import 'package:pixmind/src/providers/post_provider.dart';
 import 'package:pixmind/src/models/post_model.dart';
 import 'package:video_player/video_player.dart';
+import 'package:pixmind/src/widgets/comment_section.dart'; // Added comment section widget
 
 /// ReelsScreen displays short video content similar to Instagram Reels
 class ReelsScreen extends StatefulWidget {
@@ -401,12 +402,19 @@ class _ReelVideoPlayerState extends State<ReelVideoPlayer> {
                             size: 30,
                           ),
                           onPressed: () {
-                            // TODO: Implement comment functionality
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Comment feature coming soon!'),
-                                backgroundColor: Colors.blue,
+                            // Show comment section in a modal bottom sheet
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                               ),
+                              builder: (BuildContext context) {
+                                return Container(
+                                  height: MediaQuery.of(context).size.height * 0.6,
+                                  child: CommentSection(postId: widget.reel.id),
+                                );
+                              },
                             );
                           },
                         ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:pixmind/src/providers/search_provider.dart';
 import 'package:pixmind/src/models/user_model.dart';
+import 'package:pixmind/src/features/profile/profile_screen.dart'; // Import profile screen
 
 /// SearchScreen allows users to search for other users
 class SearchScreen extends StatefulWidget {
@@ -58,7 +59,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 searchProvider.searchUsers(value);
               },
               decoration: InputDecoration(
-                hintText: 'Search users...',
+                hintText: 'Search users by username or EId...',
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(30),
@@ -110,7 +111,7 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
           SizedBox(height: 10),
           Text(
-            'Enter a username to find people',
+            'Enter a username or EId to find people',
             style: TextStyle(
               color: Colors.grey[500],
             ),
@@ -144,7 +145,9 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         ),
         title: Text(
-          user.username,
+          user.fullName != null && user.fullName!.isNotEmpty 
+              ? '${user.fullName} (${user.username})' 
+              : user.username,
           style: TextStyle(
             fontWeight: FontWeight.bold,
           ),
@@ -168,6 +171,15 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
           ),
         ),
+        onTap: () {
+          // Navigate to user's profile when tapped
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => UserProfileViewScreen(user: user),
+            ),
+          );
+        },
       ),
     );
   }

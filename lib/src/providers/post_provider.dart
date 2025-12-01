@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pixmind/src/models/post_model.dart';
+import 'package:pixmind/src/models/comment_model.dart'; // Added comment model
 import 'package:pixmind/src/services/firestore_service.dart';
 
 /// PostProvider manages the posts state of the application
@@ -116,5 +117,10 @@ class PostProvider with ChangeNotifier {
     } catch (e) {
       rethrow;
     }
+  }
+  
+  /// Get comments for a post
+  Stream<List<CommentModel>> getComments(String postId) {
+    return _firestoreService.getComments(postId);
   }
 }
